@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --color-ink: #1c1c1c;
+  --color-ink-soft: #5a5648;
+  --color-paper: #faf8f1;
+  --color-card: #ffffff;
+  --color-border: #e3ddc9;
+
+  --color-gold: #c9a227;
+  --color-gold-light: #e7ce7c;
+  --color-gold-dark: #8f7013;
+  --color-black: #111111;
+  --color-charcoal: #1c1c1c;
+
+  --color-success: #1f8a4c;
+  --color-success-bg: #e7f6ec;
+  --color-danger: #c23b32;
+  --color-danger-bg: #fbeae8;
+}
+
+@theme inline {
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-paper: var(--color-paper);
+  --color-card: var(--color-card);
+  --color-border: var(--color-border);
+  --color-gold: var(--color-gold);
+  --color-gold-light: var(--color-gold-light);
+  --color-gold-dark: var(--color-gold-dark);
+  --color-black: var(--color-black);
+  --color-success: var(--color-success);
+  --color-success-bg: var(--color-success-bg);
+  --color-danger: var(--color-danger);
+  --color-danger-bg: var(--color-danger-bg);
+  --font-sans: var(--font-tajawal);
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--color-gold-light);
+  color: var(--color-black);
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
