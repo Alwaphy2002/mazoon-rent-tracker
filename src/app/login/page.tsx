@@ -8,7 +8,7 @@ import { Button, Card, ErrorText, Field, TextInput } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,10 +18,21 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     const supabase = createClient();
+
+    // Accounts can also log in with a short username instead of the full
+    // email — resolve it to the real (auth) email first when needed.
+    let email = identifier.trim();
+    if (!email.includes("@")) {
+      const { data: resolvedEmail } = await supabase.rpc("get_login_email", {
+        p_username: email,
+      });
+      if (resolvedEmail) email = resolvedEmail;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      setError("اسم المستخدم/البريد الإلكتروني أو كلمة المرور غير صحيحة");
       return;
     }
     router.push("/");
@@ -41,14 +52,16 @@ export default function LoginPage() {
 
         <Card>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <Field label="البريد الإلكتروني">
+            <Field label="اسم المستخدم أو البريد الإلكتروني">
               <TextInput
-                type="email"
+                type="text"
                 required
                 dir="ltr"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
+                autoCapitalize="off"
+                autoCorrect="off"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="admin"
               />
             </Field>
             <Field label="كلمة المرور">

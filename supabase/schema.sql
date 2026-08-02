@@ -16,8 +16,26 @@ create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
   role user_role not null default 'viewer',
+  username text unique,
   created_at timestamptz not null default now()
 );
+
+-- Lets the login page accept a short username instead of the full email.
+-- Public (anon) callable by design — it only ever returns the email tied
+-- to an existing username, nothing else.
+create or replace function get_login_email(p_username text)
+returns text
+language sql stable
+security definer set search_path = public
+as $$
+  select au.email
+  from profiles p
+  join auth.users au on au.id = p.id
+  where p.username = p_username
+  limit 1;
+$$;
+
+grant execute on function get_login_email(text) to anon;
 
 -- Auto-create a profile row whenever a new auth user signs up.
 create function public.handle_new_user()
