@@ -9,6 +9,7 @@ import type { UserRole } from "@/lib/types";
 const ADMIN_LINKS = [
   { href: "/tenants", label: "بيان المستأجرين" },
   { href: "/tenants/new", label: "إضافة مستأجر" },
+  { href: "/tenants/import", label: "استيراد Excel" },
   { href: "/unpaid", label: "غير المسددين" },
   { href: "/info", label: "المعلومات" },
 ];
