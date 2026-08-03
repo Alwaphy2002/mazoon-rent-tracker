@@ -10,6 +10,11 @@ export function toMonthKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+export function shiftMonthKey(monthKey: string, delta: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return toMonthKey(new Date(y, m - 1 + delta, 1));
+}
+
 export function monthKeyLabel(monthKey: string): string {
   const [y, m] = monthKey.split("-").map(Number);
   const names = [

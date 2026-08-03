@@ -1,7 +1,8 @@
 import * as XLSX from "xlsx";
-import type { ContractWithUnits } from "@/lib/types";
+import type { ContractWithUnits, UnitType } from "@/lib/types";
 import { UNIT_TYPE_LABELS } from "@/lib/types";
-import { formatDate, contractEndDate, nextDueDate } from "@/lib/dates";
+import { formatDate, contractEndDate, nextDueDate, monthKeyLabel } from "@/lib/dates";
+import type { RpcIncomeSummary, RpcPaidTenant } from "@/lib/data";
 
 export function exportContractsToExcel(contracts: ContractWithUnits[], filename: string) {
   const rows = contracts.map((c) => ({
@@ -29,4 +30,35 @@ export function exportContractsToExcel(contracts: ContractWithUnits[], filename:
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "المستأجرين");
   XLSX.writeFile(workbook, `${filename}.xlsx`);
+}
+
+export function exportIncomeSummaryToExcel(
+  monthKey: string,
+  summary: RpcIncomeSummary,
+  paidTenants: RpcPaidTenant[]
+) {
+  const summaryRows = [
+    { البيان: "الشهر", القيمة: monthKeyLabel(monthKey) },
+    { البيان: "إجمالي الدخل الشهري (ريال، بدون التأمين)", القيمة: summary.total_monthly_income },
+    { البيان: "إجمالي مبالغ التأمين المحتجزة (ريال)", القيمة: summary.total_deposits },
+    { البيان: "عدد المسددين", القيمة: summary.paid_count },
+    { البيان: "عدد غير المسددين", القيمة: summary.unpaid_count },
+  ];
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  summarySheet["!cols"] = [{ wch: 34 }, { wch: 20 }];
+  summarySheet["!dir"] = "rtl";
+
+  const tenantRows = paidTenants.map((t) => ({
+    "اسم المستأجر": t.tenant_name,
+    "الوحدات": t.units.map((u) => `${u.code} (${UNIT_TYPE_LABELS[u.type as UnitType]})`).join(" + "),
+    "الإيجار الشهري": t.monthly_rent,
+  }));
+  const tenantSheet = XLSX.utils.json_to_sheet(tenantRows);
+  tenantSheet["!cols"] = [{ wch: 24 }, { wch: 24 }, { wch: 16 }];
+  tenantSheet["!dir"] = "rtl";
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "الملخص");
+  XLSX.utils.book_append_sheet(workbook, tenantSheet, "المستأجرون المسددون");
+  XLSX.writeFile(workbook, `تقرير_الدخل_${monthKeyLabel(monthKey)}.xlsx`);
 }

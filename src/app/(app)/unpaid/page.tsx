@@ -15,7 +15,7 @@ export default async function UnpaidPage() {
         <PageTitle>المستأجرون غير المسددين ({unpaid.length})</PageTitle>
         <ExportButton contracts={unpaid} filename="المستأجرون_غير_المسددين" />
       </div>
-      <TenantList contracts={unpaid} showWhatsApp />
+      <TenantList contracts={unpaid} />
     </div>
   );
 }

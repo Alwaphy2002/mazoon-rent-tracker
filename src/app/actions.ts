@@ -155,6 +155,30 @@ export async function endContract(input: EndContractInput) {
   return { error: null };
 }
 
+export async function renewContract(contractId: string, additionalMonths: number) {
+  const supabase = await createClient();
+
+  if (additionalMonths < 1 || additionalMonths > 12) {
+    return { error: "عدد الأشهر يجب أن يكون بين 1 و 12" };
+  }
+
+  const { data: contract, error: fetchError } = await supabase
+    .from("contracts")
+    .select("duration_months")
+    .eq("id", contractId)
+    .single();
+  if (fetchError || !contract) return { error: fetchError?.message ?? "العقد غير موجود" };
+
+  const { error } = await supabase
+    .from("contracts")
+    .update({ duration_months: (contract.duration_months as number) + additionalMonths })
+    .eq("id", contractId);
+  if (error) return { error: error.message };
+
+  refreshTenantPages();
+  return { error: null };
+}
+
 export async function updateNotes(contractId: string, notes: string) {
   const supabase = await createClient();
   const { error } = await supabase

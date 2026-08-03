@@ -27,9 +27,13 @@ export async function getActiveContracts(): Promise<ContractWithUnits[]> {
       .map((p) => p.contract_id as string)
   );
 
+  // Contracts longer than 1 month are paid in full upfront at signing, so
+  // they're always "paid" — only 1-month (month-to-month) contracts need
+  // the monthly payments-table toggle.
   return (contracts as unknown as ContractWithUnits[]).map((c) => ({
     ...c,
-    current_payment_status: paidSet.has(c.id) ? "paid" : "unpaid",
+    current_payment_status:
+      c.duration_months > 1 || paidSet.has(c.id) ? "paid" : "unpaid",
   }));
 }
 
@@ -42,6 +46,14 @@ export async function getAllUnits(): Promise<Unit[]> {
 export async function getVacantUnits(): Promise<Unit[]> {
   const units = await getAllUnits();
   return units.filter((u) => u.status === "vacant");
+}
+
+export async function getUnitOccupancy(): Promise<{ rentedCount: number; vacantUnits: Unit[] }> {
+  const units = await getAllUnits();
+  return {
+    rentedCount: units.filter((u) => u.status === "occupied").length,
+    vacantUnits: units.filter((u) => u.status === "vacant"),
+  };
 }
 
 export function splitByPaymentStatus(contracts: ContractWithUnits[]) {
@@ -62,7 +74,6 @@ export function splitByPaymentStatus(contracts: ContractWithUnits[]) {
 export interface RpcIncomeSummary {
   total_monthly_income: number;
   total_deposits: number;
-  active_count: number;
   paid_count: number;
   unpaid_count: number;
 }
@@ -74,7 +85,6 @@ export async function getIncomeSummaryPublic(monthKey: string): Promise<RpcIncom
   return {
     total_monthly_income: Number(row?.total_monthly_income ?? 0),
     total_deposits: Number(row?.total_deposits ?? 0),
-    active_count: Number(row?.active_count ?? 0),
     paid_count: Number(row?.paid_count ?? 0),
     unpaid_count: Number(row?.unpaid_count ?? 0),
   };

@@ -70,7 +70,9 @@ create table contracts (
   national_id text not null,
   phone text not null,
   start_date date not null,
-  duration_months int not null check (duration_months between 1 and 12),
+  -- Grows past 12 via renewals (a renewal adds months on top of the
+  -- remaining term), so only a lower bound is enforced.
+  duration_months int not null check (duration_months >= 1),
   monthly_rent numeric(12,2) not null check (monthly_rent >= 0),
   deposit_amount numeric(12,2) not null default 0 check (deposit_amount >= 0),
   owner_account text,
@@ -183,48 +185,51 @@ create policy payments_admin_delete on payments
 -- notes) — safe for the two view-only accounts to call directly.
 -- ============================================================
 
+-- A contract "covers" a given month if that month falls within its
+-- [start_date, start_date + duration_months) span — this lets both
+-- functions below answer for *any* month, past or future, not just
+-- the current one (needed for the info page's month navigation).
+--
+-- Payment model: a contract longer than 1 month is paid in full
+-- upfront at signing, so it counts as paid for every month it covers.
+-- A 1-month (month-to-month) contract only counts as paid for a month
+-- if it has an explicit 'paid' row in `payments` for that month.
 create or replace function get_income_summary(p_month_key text)
 returns table (
   total_monthly_income numeric,
   total_deposits numeric,
-  active_count bigint,
   paid_count bigint,
   unpaid_count bigint
 )
 language sql stable
 security definer set search_path = public
 as $$
-  -- A contract still counts toward rent income for a given month if it's
-  -- active, or if it was ended during that same month (ending a contract
-  -- shouldn't retroactively erase income already earned that month).
-  -- Deposits held are different: an active contract's full deposit counts,
-  -- but once a contract ends, only the *unrefunded remainder* counts (a
-  -- full refund drops it to 0, a partial refund leaves the rest counted,
-  -- matching money the office is still holding rather than money earned).
-  with income_set as (
-    select c.id, c.monthly_rent
-    from contracts c
-    where c.status = 'active'
-       or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
+  with month_start as (
+    select to_date(p_month_key || '-01', 'YYYY-MM-DD') as d
   ),
-  deposit_set as (
-    select
-      case
-        when c.status = 'active' then c.deposit_amount
-        else greatest(c.deposit_amount - coalesce(c.deposit_refund_amount, 0), 0)
-      end as deposit_amount
-    from contracts c
-    where c.status in ('active', 'ended')
+  covering as (
+    select c.id, c.monthly_rent, c.duration_months
+    from contracts c, month_start ms
+    where date_trunc('month', c.start_date) <= ms.d
+      and ms.d < date_trunc('month', c.start_date) + (c.duration_months || ' months')::interval
+      and (c.status = 'active' or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key))
   ),
-  paid_ids as (
+  explicit_paid as (
     select p.contract_id from payments p where p.month_key = p_month_key and p.status = 'paid'
+  ),
+  paid_set as (
+    select id, monthly_rent from covering
+    where duration_months > 1 or id in (select contract_id from explicit_paid)
   )
   select
-    coalesce((select sum(monthly_rent) from income_set), 0),
-    coalesce((select sum(deposit_amount) from deposit_set), 0),
-    (select count(*) from income_set),
-    (select count(*) from income_set where id in (select contract_id from paid_ids)),
-    (select count(*) from income_set where id not in (select contract_id from paid_ids));
+    coalesce((select sum(monthly_rent) from paid_set), 0),
+    coalesce((
+      select sum(case when status = 'active' then deposit_amount
+                       else greatest(deposit_amount - coalesce(deposit_refund_amount, 0), 0) end)
+      from contracts where status in ('active', 'ended')
+    ), 0),
+    (select count(*) from paid_set),
+    (select count(*) from covering) - (select count(*) from paid_set);
 $$;
 
 grant execute on function get_income_summary(text) to authenticated;
@@ -239,19 +244,33 @@ returns table (
 language sql stable
 security definer set search_path = public
 as $$
+  with month_start as (
+    select to_date(p_month_key || '-01', 'YYYY-MM-DD') as d
+  ),
+  covering as (
+    select c.id, c.tenant_name, c.monthly_rent, c.duration_months
+    from contracts c, month_start ms
+    where date_trunc('month', c.start_date) <= ms.d
+      and ms.d < date_trunc('month', c.start_date) + (c.duration_months || ' months')::interval
+      and (c.status = 'active' or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key))
+  ),
+  explicit_paid as (
+    select p.contract_id from payments p where p.month_key = p_month_key and p.status = 'paid'
+  ),
+  paid_set as (
+    select id, tenant_name, monthly_rent from covering
+    where duration_months > 1 or id in (select contract_id from explicit_paid)
+  )
   select
-    c.id,
-    c.tenant_name,
-    c.monthly_rent,
+    ps.id,
+    ps.tenant_name,
+    ps.monthly_rent,
     jsonb_agg(jsonb_build_object('code', u.code, 'type', u.type) order by u.code)
-  from contracts c
-  join payments p on p.contract_id = c.id and p.month_key = p_month_key and p.status = 'paid'
-  join contract_units cu on cu.contract_id = c.id
+  from paid_set ps
+  join contract_units cu on cu.contract_id = ps.id
   join units u on u.id = cu.unit_id
-  where c.status = 'active'
-     or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
-  group by c.id, c.tenant_name, c.monthly_rent
-  order by c.tenant_name;
+  group by ps.id, ps.tenant_name, ps.monthly_rent
+  order by ps.tenant_name;
 $$;
 
 grant execute on function get_paid_tenants(text) to authenticated;

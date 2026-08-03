@@ -30,3 +30,9 @@ export function buildWhatsAppReminderLink(
   const wa = normalizePhoneForWhatsApp(phone);
   return `https://wa.me/${wa}?text=${encodeURIComponent(message)}`;
 }
+
+export function buildWhatsAppGreetingLink(phone: string, tenantName: string): string {
+  const message = `مرحبًا ${tenantName}،\nنتواصل معكم من مكتب مزون الشرق.`;
+  const wa = normalizePhoneForWhatsApp(phone);
+  return `https://wa.me/${wa}?text=${encodeURIComponent(message)}`;
+}
