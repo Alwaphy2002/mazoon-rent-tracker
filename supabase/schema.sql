@@ -194,25 +194,30 @@ returns table (
 language sql stable
 security definer set search_path = public
 as $$
-  -- A contract still counts for a given month if it's active, or if it was
-  -- ended during that same month (ending a contract shouldn't retroactively
-  -- erase the income already earned for the month it ended in).
-  with active as (
-    select c.id, c.monthly_rent, c.deposit_amount
+  -- A contract still counts toward rent income for a given month if it's
+  -- active, or if it was ended during that same month (ending a contract
+  -- shouldn't retroactively erase income already earned that month).
+  -- Deposits held are different: once a contract ends the deposit is being
+  -- returned, so it drops out of "total deposits held" immediately rather
+  -- than lingering through the end of that month.
+  with income_set as (
+    select c.id, c.monthly_rent
     from contracts c
     where c.status = 'active'
        or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
+  ),
+  deposit_set as (
+    select c.deposit_amount from contracts c where c.status = 'active'
   ),
   paid_ids as (
     select p.contract_id from payments p where p.month_key = p_month_key and p.status = 'paid'
   )
   select
-    coalesce(sum(a.monthly_rent), 0),
-    coalesce(sum(a.deposit_amount), 0),
-    count(*),
-    count(*) filter (where a.id in (select contract_id from paid_ids)),
-    count(*) filter (where a.id not in (select contract_id from paid_ids))
-  from active a;
+    coalesce((select sum(monthly_rent) from income_set), 0),
+    coalesce((select sum(deposit_amount) from deposit_set), 0),
+    (select count(*) from income_set),
+    (select count(*) from income_set where id in (select contract_id from paid_ids)),
+    (select count(*) from income_set where id not in (select contract_id from paid_ids));
 $$;
 
 grant execute on function get_income_summary(text) to authenticated;
