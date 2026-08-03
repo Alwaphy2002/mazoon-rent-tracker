@@ -194,8 +194,14 @@ returns table (
 language sql stable
 security definer set search_path = public
 as $$
+  -- A contract still counts for a given month if it's active, or if it was
+  -- ended during that same month (ending a contract shouldn't retroactively
+  -- erase the income already earned for the month it ended in).
   with active as (
-    select c.id, c.monthly_rent, c.deposit_amount from contracts c where c.status = 'active'
+    select c.id, c.monthly_rent, c.deposit_amount
+    from contracts c
+    where c.status = 'active'
+       or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
   ),
   paid_ids as (
     select p.contract_id from payments p where p.month_key = p_month_key and p.status = 'paid'
@@ -231,6 +237,7 @@ as $$
   join contract_units cu on cu.contract_id = c.id
   join units u on u.id = cu.unit_id
   where c.status = 'active'
+     or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
   group by c.id, c.tenant_name, c.monthly_rent
   order by c.tenant_name;
 $$;
