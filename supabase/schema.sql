@@ -197,9 +197,10 @@ as $$
   -- A contract still counts toward rent income for a given month if it's
   -- active, or if it was ended during that same month (ending a contract
   -- shouldn't retroactively erase income already earned that month).
-  -- Deposits held are different: once a contract ends the deposit is being
-  -- returned, so it drops out of "total deposits held" immediately rather
-  -- than lingering through the end of that month.
+  -- Deposits held are different: an active contract's full deposit counts,
+  -- but once a contract ends, only the *unrefunded remainder* counts (a
+  -- full refund drops it to 0, a partial refund leaves the rest counted,
+  -- matching money the office is still holding rather than money earned).
   with income_set as (
     select c.id, c.monthly_rent
     from contracts c
@@ -207,7 +208,13 @@ as $$
        or (c.status = 'ended' and to_char(c.ended_at, 'YYYY-MM') = p_month_key)
   ),
   deposit_set as (
-    select c.deposit_amount from contracts c where c.status = 'active'
+    select
+      case
+        when c.status = 'active' then c.deposit_amount
+        else greatest(c.deposit_amount - coalesce(c.deposit_refund_amount, 0), 0)
+      end as deposit_amount
+    from contracts c
+    where c.status in ('active', 'ended')
   ),
   paid_ids as (
     select p.contract_id from payments p where p.month_key = p_month_key and p.status = 'paid'
